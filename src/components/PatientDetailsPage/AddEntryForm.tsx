@@ -11,35 +11,39 @@ import {
   Typography,
   Rating,
 } from "@mui/material";
-import { Entry, HealthCheckRating } from "../../types";
-import { UnionOmit } from "../../util";
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 
-type EntryFormValues = UnionOmit<Entry, "id">;
+import {
+  Entry,
+  EntryFormValues,
+  EntryType,
+  HealthCheckRating,
+} from "../../types";
+
+import { assertNever } from "../../util";
 
 interface Props {
+  diagnoses: Map<string, string>;
   onSubmit: (values: EntryFormValues) => void;
   onCancel: () => void;
 }
 
-const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
-  const [entryType, setEntryType] = useState<Entry["type"]>("HealthCheck");
+const AddEntryForm = ({ diagnoses, onSubmit, onCancel }: Props) => {
+  const [entryType, setEntryType] = useState<Entry["type"]>(
+    EntryType.HealthCheck
+  );
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [specialist, setSpecialist] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [diagnosisCodes, setDiagnosisCodes] = useState<string[]>([]);
-
-  // HealthCheck specific state
   const [healthCheckRating, setHealthCheckRating] = useState<HealthCheckRating>(
     HealthCheckRating.Healthy
   );
 
-  // OccupationalHealthcare specific state
   const [employerName, setEmployerName] = useState("");
   const [sickLeaveStart, setSickLeaveStart] = useState("");
   const [sickLeaveEnd, setSickLeaveEnd] = useState("");
-
-  // Hospital specific state
   const [dischargeDate, setDischargeDate] = useState("");
   const [dischargeCriteria, setDischargeCriteria] = useState("");
 
@@ -73,25 +77,46 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
         onChange={(e) => setSpecialist(e.target.value)}
         sx={{ marginBottom: 2 }}
       />
+      <FormControl fullWidth sx={{ marginBottom: 2 }}>
+        <InputLabel>Diagnosis Codes</InputLabel>
+        <Select
+          multiple
+          value={diagnosisCodes}
+          onChange={(e) => {
+            const value = e.target.value;
+            setDiagnosisCodes(
+              typeof value === "string" ? value.split(",") : value
+            );
+          }}
+          label="Diagnosis Codes"
+        >
+          {Array.from(diagnoses.entries()).map(([code, name]) => (
+            <MenuItem key={code} value={code}>
+              {code} - {name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
     </>
   );
 
   const typeSpecificFields = () => {
     switch (entryType) {
-      case "HealthCheck":
+      case EntryType.HealthCheck:
         return (
           <FormControl fullWidth sx={{ marginBottom: 2 }}>
             <Typography component="legend">Health Check Rating</Typography>
             <Rating
               max={3}
+              precision={1}
               value={healthCheckRating}
-              onChange={(_, value) =>
-                value !== null && setHealthCheckRating(value)
-              }
+              onChange={(_, value) => setHealthCheckRating(value ?? 0)}
+              icon={<FavoriteIcon fontSize="inherit" />}
+              emptyIcon={<FavoriteBorderIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
             />
           </FormControl>
         );
-      case "OccupationalHealthcare":
+      case EntryType.OccupationalHealthcare:
         return (
           <>
             <TextField
@@ -109,7 +134,7 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
               value={sickLeaveStart}
               onChange={(e) => setSickLeaveStart(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ marginBottom: 2 }}
+              sx={{ marginBottom: 2, marginTop: 1 }}
             />
             <TextField
               label="End Date"
@@ -122,7 +147,7 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
             />
           </>
         );
-      case "Hospital":
+      case EntryType.Hospital:
         return (
           <>
             <TextField
@@ -143,6 +168,8 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
             />
           </>
         );
+      default:
+        assertNever(entryType);
     }
   };
 
@@ -159,17 +186,17 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
     let entryValues: EntryFormValues;
 
     switch (entryType) {
-      case "HealthCheck":
+      case EntryType.HealthCheck:
         entryValues = {
           ...baseEntry,
-          type: "HealthCheck",
+          type: EntryType.HealthCheck,
           healthCheckRating,
         };
         break;
-      case "OccupationalHealthcare":
+      case EntryType.OccupationalHealthcare:
         entryValues = {
           ...baseEntry,
-          type: "OccupationalHealthcare",
+          type: entryType,
           employerName,
           ...(sickLeaveStart && sickLeaveEnd
             ? {
@@ -181,50 +208,67 @@ const AddEntryForm = ({ onSubmit, onCancel }: Props) => {
             : {}),
         };
         break;
-      case "Hospital":
+      case EntryType.Hospital:
         entryValues = {
           ...baseEntry,
-          type: "Hospital",
+          type: entryType,
           discharge: {
             date: dischargeDate,
             criteria: dischargeCriteria,
           },
         };
         break;
+      default:
+        assertNever(entryType);
     }
 
-    onSubmit(entryValues);
+    onSubmit(entryValues!);
   };
 
   return (
-    <form onSubmit={submit}>
-      <FormControl fullWidth sx={{ marginBottom: 2 }}>
-        <InputLabel>Entry Type</InputLabel>
-        <Select
-          value={entryType}
-          onChange={(e) => onEntryTypeChange(e.target.value as Entry["type"])}
-          label="Entry Type"
-        >
-          <MenuItem value="HealthCheck">Health Check</MenuItem>
-          <MenuItem value="OccupationalHealthcare">
-            Occupational Healthcare
-          </MenuItem>
-          <MenuItem value="Hospital">Hospital</MenuItem>
-        </Select>
-      </FormControl>
+    <Box
+      style={{
+        border: "1px solid #ccc",
+        padding: "1em",
+        marginBottom: "1em",
+      }}
+    >
+      <form onSubmit={submit}>
+        <FormControl fullWidth sx={{ marginBottom: 2 }}>
+          <InputLabel>Entry Type</InputLabel>
+          <Select
+            value={entryType}
+            onChange={(e) => onEntryTypeChange(e.target.value as Entry["type"])}
+            label="Entry Type"
+          >
+            <MenuItem value={EntryType.HealthCheck}>Health Check</MenuItem>
+            <MenuItem value={EntryType.OccupationalHealthcare}>
+              Occupational Healthcare
+            </MenuItem>
 
-      {baseFields}
-      {typeSpecificFields()}
+            <MenuItem value={EntryType.Hospital}>Hospital</MenuItem>
+          </Select>
+        </FormControl>
 
-      <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
-        <Button type="submit" variant="contained" color="primary">
-          Add
-        </Button>
-        <Button variant="outlined" onClick={onCancel}>
-          Cancel
-        </Button>
-      </Box>
-    </form>
+        <Box sx={{ display: 'flex', gap: 4 }}>
+          <Box sx={{ flex: 1 }}>
+            {baseFields}
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            {typeSpecificFields()}
+          </Box>
+        </Box>
+
+        <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
+          <Button type="submit" variant="contained" color="primary">
+            Add
+          </Button>
+          <Button variant="outlined" onClick={onCancel}>
+            Cancel
+          </Button>
+        </Box>
+      </form>
+    </Box>
   );
 };
 
